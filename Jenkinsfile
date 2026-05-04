@@ -104,10 +104,10 @@ pipeline {
                     
                     # Install Terraform
                     if ! command -v terraform &> /dev/null; then
-                        wget -q https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
-                        unzip -o terraform_1.5.7_linux_amd64.zip
-                        mv terraform /usr/local/bin/
-                        rm terraform_1.5.7_linux_amd64.zip
+                        wget -q -O /tmp/terraform.zip https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+                        unzip -o /tmp/terraform.zip -d /tmp
+                        mv /tmp/terraform /usr/local/bin/terraform
+                        rm /tmp/terraform.zip
                     fi
                     
                     # Install Kubectl
