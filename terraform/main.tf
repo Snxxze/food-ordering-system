@@ -1,5 +1,5 @@
 provider "kubernetes" {
-  config_path = var.kube_config_path
+  # ปล่อยว่างไว้ Terraform จะดึงกุญแจจาก environment variable (KUBECONFIG) ของ Jenkins โดยอัตโนมัติ
 }
 
 resource "kubernetes_namespace_v1" "food_system" {
