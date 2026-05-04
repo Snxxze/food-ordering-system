@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  jenkins:
+    image: jenkins/jenkins:lts
+    container_name: devops-jenkins
+    user: root
+    ports:
+      - "9090:8080" # เข้าใช้งานที่ http://localhost:9090
+      - "50000:50000" # Jenkins Agent port
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+      - C:/Users/Acer/.kube:/var/jenkins_home/.kube:ro
+      - C:/Users/Acer/.minikube:C:/Users/Acer/.minikube:ro
+    restart: unless-stopped
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+
+volumes:
+  jenkins_home:
+    name: jenkins_home
