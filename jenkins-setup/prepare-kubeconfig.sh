@@ -1,8 +1,9 @@
 #!/bin/bash
 echo "Preparing Kubernetes Configuration..."
 
-mkdir -p ~/.kube
-cp /root/.kube/config ~/.kube/config
+mkdir -p /tmp/.kube
+cp /root/.kube/config /tmp/.kube/config
+chmod 600 /tmp/.kube/config
 
 echo "Discovering Minikube Port via Docker Socket..."
 # Fetch container info
@@ -20,14 +21,14 @@ echo "Current Minikube Port: $MINIKUBE_PORT"
 
 # Replace the Windows paths with Linux paths
 # We match 'C:.*minikube' to avoid dealing with backslash escapes
-sed -i 's|C:.*minikube|/root/.minikube|g' ~/.kube/config
+sed -i 's|C:.*minikube|/root/.minikube|g' /tmp/.kube/config
 
 # Replace localhost with host.docker.internal and the correct port
-sed -i "s|127.0.0.1:[0-9]*|host.docker.internal:$MINIKUBE_PORT|g" ~/.kube/config
+sed -i "s|127.0.0.1:[0-9]*|host.docker.internal:$MINIKUBE_PORT|g" /tmp/.kube/config
 
 # Add insecure-skip-tls-verify to avoid cert hostname issues
-sed -i '/certificate-authority:/d' ~/.kube/config
-sed -i '/server:/a \    insecure-skip-tls-verify: true' ~/.kube/config
+sed -i '/certificate-authority:/d' /tmp/.kube/config
+sed -i '/server:/a \    insecure-skip-tls-verify: true' /tmp/.kube/config
 
 echo "Testing connection..."
 kubectl get nodes || echo "Warning: Pre-check failed, but proceeding..."

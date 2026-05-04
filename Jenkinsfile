@@ -95,6 +95,30 @@ pipeline {
             }
         }
 
+        stage('Setup Environment') {
+            steps {
+                echo 'Installing required tools (Terraform, Kubectl, Ansible) if missing...'
+                sh '''
+                    # Ensure basic utilities are present
+                    apt-get update && apt-get install -y unzip wget curl ansible sshpass
+                    
+                    # Install Terraform
+                    if ! command -v terraform &> /dev/null; then
+                        wget -q https://releases.hashicorp.com/terraform/1.5.7/terraform_1.5.7_linux_amd64.zip
+                        unzip -o terraform_1.5.7_linux_amd64.zip
+                        mv terraform /usr/local/bin/
+                        rm terraform_1.5.7_linux_amd64.zip
+                    fi
+                    
+                    # Install Kubectl
+                    if ! command -v kubectl &> /dev/null; then
+                        curl -sLO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+                        install -o root -g root -m 0755 kubectl /usr/local/bin/kubectl
+                    fi
+                '''
+            }
+        }
+
         stage('Prepare K8s Config') {
             steps {
                 echo 'Preparing Kubernetes Configuration...'
@@ -109,8 +133,11 @@ pipeline {
             steps {
                 echo 'Provisioning Infrastructure with Terraform...'
                 dir('terraform') {
-                    sh 'terraform init -input=false'
-                    sh 'terraform apply -auto-approve -input=false'
+                    sh '''
+                        export KUBECONFIG=/tmp/.kube/config
+                        terraform init -input=false
+                        terraform apply -auto-approve -input=false
+                    '''
                 }
             }
         }
@@ -119,7 +146,11 @@ pipeline {
             steps {
                 echo 'Configuring Environment with Ansible...'
                 dir('ansible') {
-                    sh 'ansible-playbook -i inventory playbook.yml'
+                    sh '''
+                        export KUBECONFIG=/tmp/.kube/config
+                        export ANSIBLE_HOST_KEY_CHECKING=False
+                        ansible-playbook -i inventory playbook.yml
+                    '''
                 }
             }
         }
@@ -128,6 +159,7 @@ pipeline {
             steps {
                 echo "Deploying to Kubernetes namespace: ${K8S_NAMESPACE}..."
                 sh """
+                    export KUBECONFIG=/tmp/.kube/config
                     kubectl set image deployment/food-backend \
                         food-backend=${BACKEND_IMAGE}:${env.BUILD_ID} \
                         -n ${K8S_NAMESPACE} || \
