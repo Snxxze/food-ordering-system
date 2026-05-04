@@ -102,16 +102,23 @@ pipeline {
                     mkdir -p ~/.kube
                     cp /root/.kube/config ~/.kube/config
                     
-                    # ค้นหา Port ล่าสุดของ Minikube
-                    MINIKUBE_PORT=$(docker port minikube 8443 | cut -d: -f2)
+                    # ค้นหา Port ล่าสุดของ Minikube โดยใช้ curl คุยกับ Docker Socket โดยตรง (ไม่ต้องใช้ docker CLI)
+                    echo "Discovering Minikube Port via Docker Socket..."
+                    MINIKUBE_PORT=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/minikube/json | grep -oP '"8443/tcp":\\[{"HostIp":"127.0.0.1","HostPort":"\\K[0-9]+')
+                    
+                    if [ -z "$MINIKUBE_PORT" ]; then
+                        echo "Failed to discover port via JSON, trying fallback..."
+                        MINIKUBE_PORT=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/minikube/json | sed -n 's/.*"HostPort":"\([0-9]*\)".*/\1/p' | head -n 1)
+                    fi
+                    
                     echo "Current Minikube Port: $MINIKUBE_PORT"
                     
                     # แก้ไข Windows Path เป็น Linux Path และอัปเดต IP/Port
                     sed -i 's|C:\\\\Users\\\\Acer\\\\.minikube|/root/.minikube|g' ~/.kube/config
                     sed -i "s|127.0.0.1:[0-9]*|host.docker.internal:$MINIKUBE_PORT|g" ~/.kube/config
                     
-                    # ตรวจสอบการเชื่อมต่อ
-                    kubectl get nodes || echo "Warning: Pre-flight check failed, but proceeding..."
+                    # ตรวจสอบว่า kubectl ยังใช้งานได้ (ถ้ามีติดตั้งไว้)
+                    kubectl get nodes || echo "Warning: kubectl pre-check failed, but we will try Terraform anyway..."
                 '''
             }
         }
