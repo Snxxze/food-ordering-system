@@ -2,27 +2,17 @@
 set -e
 echo "=== Preparing Kubernetes Configuration ==="
 
-# 1. Copy kubeconfig to a writable location
-mkdir -p /tmp/.kube
-cp /root/.kube/config /tmp/.kube/config
-chmod 600 /tmp/.kube/config
-
-# 2. Discover Minikube port from Docker Socket API
-echo "Discovering Minikube port..."
-JSON=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/minikube/json 2>/dev/null || echo "")
-
-if [ -n "$JSON" ]; then
-    MINIKUBE_PORT=$(echo "$JSON" | grep -o '"HostPort":"[0-9]*"' | head -n 1 | grep -o '[0-9]*')
-fi
+# 1. Extract the real minikube port from the mounted host kubeconfig
+MINIKUBE_PORT=$(grep 'server:.*127.0.0.1' /root/.kube/config | grep -o '[0-9]*$')
 
 if [ -z "$MINIKUBE_PORT" ]; then
-    echo "WARNING: Could not discover port, using default 8443"
-    MINIKUBE_PORT=8443
+    echo "ERROR: Could not find minikube port in kubeconfig"
+    exit 1
 fi
-echo "Minikube Port: $MINIKUBE_PORT"
+echo "Minikube Port from host kubeconfig: $MINIKUBE_PORT"
 
-# 3. Build a clean minikube-only kubeconfig from scratch
-# This avoids all sed escaping issues with Windows paths
+# 2. Generate a clean kubeconfig pointing to host.docker.internal
+mkdir -p /tmp/.kube
 cat > /tmp/.kube/config << EOF
 apiVersion: v1
 kind: Config
@@ -47,9 +37,9 @@ EOF
 
 echo "Kubeconfig written to /tmp/.kube/config"
 
-# 4. Verify connection
+# 3. Test connection
 export KUBECONFIG=/tmp/.kube/config
-echo "Testing connection to cluster..."
+echo "Testing connection to https://host.docker.internal:${MINIKUBE_PORT}..."
 kubectl get nodes --request-timeout=10s || echo "WARNING: kubectl pre-check failed, proceeding anyway..."
 
 echo "=== Kubernetes Configuration Ready ==="
