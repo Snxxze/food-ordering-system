@@ -19,11 +19,17 @@ pipeline {
         stage('Build') {
             steps {
                 echo 'Building Backend and Frontend...'
-                dir('backend') {
-                    sh 'go build -v .'
-                }
-                dir('frontend') {
-                    sh 'npm ci && npm run build'
+                script {
+                    docker.image('golang:1.25').inside {
+                        dir('backend') {
+                            sh 'go build -v .'
+                        }
+                    }
+                    docker.image('node:20').inside {
+                        dir('frontend') {
+                            sh 'npm ci && npm run build'
+                        }
+                    }
                 }
             }
         }
@@ -31,8 +37,12 @@ pipeline {
         stage('Test') {
             steps {
                 echo 'Running Unit Tests...'
-                dir('backend') {
-                    sh 'go test -v ./...'
+                script {
+                    docker.image('golang:1.25').inside {
+                        dir('backend') {
+                            sh 'go test -v ./...'
+                        }
+                    }
                 }
             }
         }
