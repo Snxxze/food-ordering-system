@@ -1,0 +1,45 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: food-ordering-ingress
+  namespace: food-system
+  labels:
+    app.kubernetes.io/name: food-ordering-ingress
+    app.kubernetes.io/part-of: food-ordering
+  annotations:
+    nginx.ingress.kubernetes.io/rewrite-target: /
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "10"
+    # CORS config ระดับ Ingress (จะ override CORS ที่ backend ตั้งไว้)
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "http://localhost"
+spec:
+  ingressClassName: nginx
+  rules:
+  - host: food-ordering.local
+    http:
+      paths:
+      # Frontend — path ที่เหลือทั้งหมดส่งไป Frontend
+      - path: /
+        pathType: Prefix
+        backend:
+          service:
+            name: food-frontend-svc
+            port:
+              number: 80
+      # Backend API — path ที่ขึ้นต้นด้วย /api ส่งไป Backend
+      - path: /api
+        pathType: Prefix
+        backend:
+          service:
+            name: food-backend-svc
+            port:
+              number: 8080
+      # Metrics — ให้ Prometheus เข้าถึงได้ภายใน cluster
+      - path: /metrics
+        pathType: Prefix
+        backend:
+          service:
+            name: food-backend-svc
+            port:
+              number: 8080

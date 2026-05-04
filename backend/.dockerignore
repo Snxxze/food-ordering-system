@@ -1,0 +1,15 @@
+# Git
+.git
+.gitignore
+
+# Build artifacts
+main
+*.exe
+
+# Docs
+README.md
+Dockerfile
+
+# Dev tools
+.vscode
+.idea

@@ -1,0 +1,51 @@
+---
+# Improvement #17: Ansible Role — monitoring
+# Role นี้รับผิดชอบ deploy Prometheus + Grafana configs เข้า Kubernetes
+
+- name: Ensure Monitoring data directory exists
+  file:
+    path: "{{ monitoring_data_dir }}"
+    state: directory
+    mode: '0755'
+
+- name: Apply Prometheus ConfigMap to Kubernetes
+  shell: |
+    kubectl create configmap prometheus-config \
+      --from-file={{ project_root }}/monitoring/prometheus.yml \
+      -n {{ k8s_namespace }} \
+      --dry-run=client -o yaml | kubectl apply -f -
+  changed_when: true
+
+- name: Apply Grafana Dashboard ConfigMap to Kubernetes
+  shell: |
+    kubectl create configmap grafana-dashboard \
+      --from-file={{ project_root }}/monitoring/grafana-dashboard.json \
+      -n {{ k8s_namespace }} \
+      --dry-run=client -o yaml | kubectl apply -f -
+  changed_when: true
+
+- name: Apply Prometheus Deployment
+  command: kubectl apply -f {{ project_root }}/monitoring/prometheus-deployment.yaml -n {{ k8s_namespace }}
+
+- name: Apply Grafana Deployment
+  command: kubectl apply -f {{ project_root }}/monitoring/grafana-deployment.yaml -n {{ k8s_namespace }}
+
+- name: Wait for Prometheus to be ready
+  command: >
+    kubectl rollout status deployment/prometheus
+    -n {{ k8s_namespace }} --timeout=120s
+  register: prometheus_status
+  ignore_errors: true
+
+- name: Wait for Grafana to be ready
+  command: >
+    kubectl rollout status deployment/grafana
+    -n {{ k8s_namespace }} --timeout=120s
+  register: grafana_status
+  ignore_errors: true
+
+- name: Print Monitoring status
+  debug:
+    msg: >
+      Prometheus: {{ 'Ready' if prometheus_status.rc == 0 else 'Not ready' }}
+      | Grafana: {{ 'Ready' if grafana_status.rc == 0 else 'Not ready' }}

@@ -1,0 +1,8 @@
+global:
+  scrape_interval: 15s # ดึงข้อมูลทุก 15 วินาที ตามที่เขียนใน README
+
+scrape_configs:
+  - job_name: 'food-backend'
+    static_configs:
+      # ชี้ไปที่ Service ของ Backend ใน Kubernetes
+      - targets: ['food-backend-svc.food-system.svc.cluster.local:8080']

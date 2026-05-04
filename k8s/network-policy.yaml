@@ -1,0 +1,138 @@
+# Default Deny All — ปิดกั้น traffic ทั้งหมดก่อน แล้วค่อย allow เฉพาะที่ต้องการ
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: food-system
+  labels:
+    app.kubernetes.io/part-of: food-ordering
+spec:
+  podSelector: {}   # เลือกทุก pod ใน namespace
+  policyTypes:
+  - Ingress
+  - Egress
+
+---
+# Backend Policy — อนุญาตให้รับ traffic จาก Frontend และ Prometheus เท่านั้น
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: food-backend-netpol
+  namespace: food-system
+  labels:
+    app.kubernetes.io/part-of: food-ordering
+spec:
+  podSelector:
+    matchLabels:
+      app: food-backend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # อนุญาตจาก Frontend pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app: food-frontend
+    ports:
+    - protocol: TCP
+      port: 8080
+  # อนุญาตจาก Prometheus (สำหรับ scrape /metrics)
+  - from:
+    - podSelector:
+        matchLabels:
+          app: prometheus
+    ports:
+    - protocol: TCP
+      port: 8080
+  # อนุญาตจาก Ingress Controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  egress:
+  # อนุญาตให้ออก DNS (port 53) เพื่อ resolve hostname
+  - ports:
+    - protocol: UDP
+      port: 53
+
+---
+# Frontend Policy — รับ traffic จาก Ingress Controller เท่านั้น
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: food-frontend-netpol
+  namespace: food-system
+  labels:
+    app.kubernetes.io/part-of: food-ordering
+spec:
+  podSelector:
+    matchLabels:
+      app: food-frontend
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # อนุญาตจาก Ingress Controller เท่านั้น
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          kubernetes.io/metadata.name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 80
+  egress:
+  # อนุญาตให้ Frontend pods คุยกับ Backend
+  - to:
+    - podSelector:
+        matchLabels:
+          app: food-backend
+    ports:
+    - protocol: TCP
+      port: 8080
+  # DNS resolution
+  - ports:
+    - protocol: UDP
+      port: 53
+
+---
+# Prometheus Policy — อนุญาตให้ scrape Backend และรับ traffic จาก Grafana
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: prometheus-netpol
+  namespace: food-system
+  labels:
+    app.kubernetes.io/part-of: food-ordering
+spec:
+  podSelector:
+    matchLabels:
+      app: prometheus
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Grafana query Prometheus
+  - from:
+    - podSelector:
+        matchLabels:
+          app: grafana
+    ports:
+    - protocol: TCP
+      port: 9090
+  egress:
+  # Prometheus scrape Backend metrics
+  - to:
+    - podSelector:
+        matchLabels:
+          app: food-backend
+    ports:
+    - protocol: TCP
+      port: 8080
+  # DNS
+  - ports:
+    - protocol: UDP
+      port: 53

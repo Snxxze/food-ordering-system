@@ -1,0 +1,43 @@
+---
+# Role นี้รับผิดชอบ deploy application manifests เข้า Kubernetes
+
+- name: Check if Kubernetes Cluster is reachable
+  command: kubectl cluster-info
+  register: k8s_status
+  ignore_errors: true
+  changed_when: false
+
+- name: Fail if Kubernetes Cluster is NOT reachable
+  fail:
+    msg: "Kubernetes Cluster is NOT reachable. Please run: minikube start"
+  when: k8s_status.rc != 0
+
+- name: Apply Kubernetes Application Manifests
+  command: kubectl apply -f {{ project_root }}/k8s/ -n {{ k8s_namespace }}
+  when: k8s_status.rc == 0
+
+- name: Apply Network Policies
+  command: kubectl apply -f {{ project_root }}/k8s/network-policy.yaml -n {{ k8s_namespace }}
+  when: k8s_status.rc == 0
+  ignore_errors: true  # Network Policy ต้องการ CNI ที่รองรับ — skip ถ้าไม่มี
+
+- name: Wait for Backend Deployment rollout
+  command: >
+    kubectl rollout status deployment/food-backend
+    -n {{ k8s_namespace }} --timeout=120s
+  register: backend_rollout
+  when: k8s_status.rc == 0
+
+- name: Wait for Frontend Deployment rollout
+  command: >
+    kubectl rollout status deployment/food-frontend
+    -n {{ k8s_namespace }} --timeout=120s
+  register: frontend_rollout
+  when: k8s_status.rc == 0
+
+- name: Print deployment result
+  debug:
+    msg: >
+      Backend: {{ 'Ready' if backend_rollout.rc == 0 else 'Not ready' }}
+      | Frontend: {{ 'Ready' if frontend_rollout.rc == 0 else 'Not ready' }}
+  when: k8s_status.rc == 0

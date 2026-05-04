@@ -1,0 +1,88 @@
+---
+# — แบ่ง logic ออกเป็น roles ทำให้ reusable และ maintainable
+- name: Prepare and Deploy Food Ordering System
+  hosts: local
+  vars:
+    monitoring_data_dir: "/opt/food-ordering/monitoring-data"
+    k8s_namespace: "food-system"
+    project_root: "{{ playbook_dir }}/.."
+
+  roles:
+    # Role 1: ตรวจสอบ cluster และ deploy application
+    - role: k8s-deploy
+
+    # Role 2: deploy monitoring stack (Prometheus + Grafana)
+    - role: monitoring
+
+
+  tasks:
+    # --- Preparation ---
+    - name: Ensure Monitoring Data Directory exists
+      file:
+        path: "{{ monitoring_data_dir }}"
+        state: directory
+        mode: '0755'
+
+    # --- Cluster Health Check ---
+    - name: Check if Kubernetes Cluster is reachable
+      command: kubectl cluster-info
+      register: k8s_status
+      ignore_errors: true
+      changed_when: false
+
+    - name: Fail if Kubernetes Cluster is NOT reachable
+      fail:
+        msg: "Kubernetes Cluster is NOT reachable. Please start Minikube first: minikube start"
+      when: k8s_status.rc != 0
+
+    - name: Print Cluster Status
+      debug:
+        msg: "Kubernetes Cluster is Ready! Proceeding with deployment..."
+      when: k8s_status.rc == 0
+
+    # --- Deploy Monitoring Configs to Kubernetes ---
+    - name: Deploy Prometheus ConfigMap to Kubernetes
+      command: >
+        kubectl create configmap prometheus-config
+        --from-file={{ project_root }}/monitoring/prometheus.yml
+        -n {{ k8s_namespace }}
+        --dry-run=client -o yaml
+      register: prometheus_cm_yaml
+      changed_when: false
+      when: k8s_status.rc == 0
+
+    - name: Apply Prometheus ConfigMap
+      shell: |
+        kubectl create configmap prometheus-config \
+          --from-file={{ project_root }}/monitoring/prometheus.yml \
+          -n {{ k8s_namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+      when: k8s_status.rc == 0
+
+    - name: Deploy Grafana Dashboard ConfigMap to Kubernetes
+      shell: |
+        kubectl create configmap grafana-dashboard \
+          --from-file={{ project_root }}/monitoring/grafana-dashboard.json \
+          -n {{ k8s_namespace }} \
+          --dry-run=client -o yaml | kubectl apply -f -
+      when: k8s_status.rc == 0
+
+    # --- Deploy Monitoring Stack ---
+    - name: Apply Monitoring manifests (Prometheus + Grafana)
+      command: kubectl apply -f {{ project_root }}/monitoring/ -n {{ k8s_namespace }}
+      when: k8s_status.rc == 0
+      ignore_errors: true
+
+    # --- Verify Deployments ---
+    - name: Check deployment rollout status
+      command: >
+        kubectl rollout status deployment/food-backend
+        -n {{ k8s_namespace }} --timeout=60s
+      register: rollout_status
+      ignore_errors: true
+      when: k8s_status.rc == 0
+
+    - name: Print deployment result
+      debug:
+        msg: "{{ 'Deployment successful!' if rollout_status.rc == 0 else 'Deployment may still be in progress' }}"
+      when: k8s_status.rc == 0

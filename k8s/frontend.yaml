@@ -1,0 +1,77 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: food-frontend
+  namespace: food-system
+  labels:
+    app.kubernetes.io/name: food-frontend
+    app.kubernetes.io/part-of: food-ordering
+    app.kubernetes.io/managed-by: kubectl
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: food-frontend
+  template:
+    metadata:
+      labels:
+        app: food-frontend
+        app.kubernetes.io/name: food-frontend
+        app.kubernetes.io/part-of: food-ordering
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101  
+      containers:
+      - name: food-frontend
+        image: gowitphooang/food-frontend:latest
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+        securityContext:
+          allowPrivilegeEscalation: false
+          capabilities:
+            drop:
+            - ALL
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "32Mi"
+          limits:
+            cpu: "200m"
+            memory: "128Mi"
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 3
+          periodSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 15
+          failureThreshold: 3
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: food-frontend-svc
+  namespace: food-system
+  labels:
+    app.kubernetes.io/name: food-frontend
+    app.kubernetes.io/part-of: food-ordering
+spec:
+  selector:
+    app: food-frontend
+  ports:
+    - protocol: TCP
+      port: 80
+      targetPort: 8080
+      nodePort: 30080
+      name: http
+  type: NodePort

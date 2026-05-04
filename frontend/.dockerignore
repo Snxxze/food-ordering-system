@@ -1,0 +1,19 @@
+# Git
+.git
+.gitignore
+
+# Dependencies (จะ install ใหม่ใน container)
+node_modules
+
+# Build output (จะ build ใหม่ใน container)
+dist
+
+# Docs & config
+README.md
+Dockerfile
+.env
+.env.local
+
+# Dev tools
+.vscode
+.idea
