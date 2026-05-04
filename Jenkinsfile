@@ -95,6 +95,27 @@ pipeline {
             }
         }
 
+        stage('Prepare K8s Config') {
+            steps {
+                echo 'Preparing Kubernetes Configuration...'
+                sh '''
+                    mkdir -p ~/.kube
+                    cp /root/.kube/config ~/.kube/config
+                    
+                    # ค้นหา Port ล่าสุดของ Minikube
+                    MINIKUBE_PORT=$(docker port minikube 8443 | cut -d: -f2)
+                    echo "Current Minikube Port: $MINIKUBE_PORT"
+                    
+                    # แก้ไข Windows Path เป็น Linux Path และอัปเดต IP/Port
+                    sed -i 's|C:\\\\Users\\\\Acer\\\\.minikube|/root/.minikube|g' ~/.kube/config
+                    sed -i "s|127.0.0.1:[0-9]*|host.docker.internal:$MINIKUBE_PORT|g" ~/.kube/config
+                    
+                    # ตรวจสอบการเชื่อมต่อ
+                    kubectl get nodes || echo "Warning: Pre-flight check failed, but proceeding..."
+                '''
+            }
+        }
+
         stage('Infrastructure (Terraform)') {
             steps {
                 echo 'Provisioning Infrastructure with Terraform...'

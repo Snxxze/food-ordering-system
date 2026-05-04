@@ -11,8 +11,8 @@ services:
     volumes:
       - jenkins_home:/var/jenkins_home
       - /var/run/docker.sock:/var/run/docker.sock
-      - C:/Users/Acer/.kube:/var/jenkins_home/.kube:ro
-      - C:/Users/Acer/.minikube:C:/Users/Acer/.minikube:ro
+      - C:/Users/Acer/.kube:/root/.kube:ro
+      - C:/Users/Acer/.minikube:/root/.minikube:ro
     restart: unless-stopped
     environment:
       - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
