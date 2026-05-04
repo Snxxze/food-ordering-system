@@ -7,6 +7,8 @@ RUN npm run build
 
 FROM nginx:1.27-alpine
 
+RUN apk update && apk upgrade --no-cache libcrypto3 libssl3 libxml2
+
 RUN addgroup -S nginxgroup && adduser -S nginxuser -G nginxgroup
 
 COPY nginx.conf /etc/nginx/nginx.conf
