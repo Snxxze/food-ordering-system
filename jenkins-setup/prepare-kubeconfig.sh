@@ -1,34 +1,55 @@
 #!/bin/bash
-echo "Preparing Kubernetes Configuration..."
+set -e
+echo "=== Preparing Kubernetes Configuration ==="
 
+# 1. Copy kubeconfig to a writable location
 mkdir -p /tmp/.kube
 cp /root/.kube/config /tmp/.kube/config
 chmod 600 /tmp/.kube/config
 
-echo "Discovering Minikube Port via Docker Socket..."
-# Fetch container info
-JSON=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/minikube/json)
+# 2. Discover Minikube port from Docker Socket API
+echo "Discovering Minikube port..."
+JSON=$(curl -s --unix-socket /var/run/docker.sock http://localhost/containers/minikube/json 2>/dev/null || echo "")
 
-# Extract port using simple string matching to avoid escape character issues
-MINIKUBE_PORT=$(echo "$JSON" | grep -o '"8443/tcp":\[{"HostIp":"127.0.0.1","HostPort":"[0-9]*"' | grep -o '[0-9]*$')
-
-if [ -z "$MINIKUBE_PORT" ]; then
-    echo "Failed to discover port, checking fallback..."
-    MINIKUBE_PORT=$(echo "$JSON" | grep -o '"HostPort":"[0-9]*"' | head -n 1 | grep -o '[0-9]*$')
+if [ -n "$JSON" ]; then
+    MINIKUBE_PORT=$(echo "$JSON" | grep -o '"HostPort":"[0-9]*"' | head -n 1 | grep -o '[0-9]*')
 fi
 
-echo "Current Minikube Port: $MINIKUBE_PORT"
+if [ -z "$MINIKUBE_PORT" ]; then
+    echo "WARNING: Could not discover port, using default 8443"
+    MINIKUBE_PORT=8443
+fi
+echo "Minikube Port: $MINIKUBE_PORT"
 
-# Replace the Windows paths with Linux paths
-# We match 'C:.*minikube' to avoid dealing with backslash escapes
-sed -i 's|C:.*minikube|/root/.minikube|g' /tmp/.kube/config
+# 3. Build a clean minikube-only kubeconfig from scratch
+# This avoids all sed escaping issues with Windows paths
+cat > /tmp/.kube/config << EOF
+apiVersion: v1
+kind: Config
+current-context: minikube
+clusters:
+- cluster:
+    server: https://host.docker.internal:${MINIKUBE_PORT}
+    insecure-skip-tls-verify: true
+  name: minikube
+contexts:
+- context:
+    cluster: minikube
+    user: minikube
+    namespace: default
+  name: minikube
+users:
+- name: minikube
+  user:
+    client-certificate: /root/.minikube/profiles/minikube/client.crt
+    client-key: /root/.minikube/profiles/minikube/client.key
+EOF
 
-# Replace localhost with host.docker.internal and the correct port
-sed -i "s|127.0.0.1:[0-9]*|host.docker.internal:$MINIKUBE_PORT|g" /tmp/.kube/config
+echo "Kubeconfig written to /tmp/.kube/config"
 
-# Add insecure-skip-tls-verify to avoid cert hostname issues
-sed -i '/certificate-authority:/d' /tmp/.kube/config
-sed -i '/server:/a \    insecure-skip-tls-verify: true' /tmp/.kube/config
+# 4. Verify connection
+export KUBECONFIG=/tmp/.kube/config
+echo "Testing connection to cluster..."
+kubectl get nodes --request-timeout=10s || echo "WARNING: kubectl pre-check failed, proceeding anyway..."
 
-echo "Testing connection..."
-kubectl get nodes || echo "Warning: Pre-check failed, but proceeding..."
+echo "=== Kubernetes Configuration Ready ==="

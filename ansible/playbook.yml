@@ -6,6 +6,8 @@
     monitoring_data_dir: "/opt/food-ordering/monitoring-data"
     k8s_namespace: "food-system"
     project_root: "{{ playbook_dir }}/.."
+  environment:
+    KUBECONFIG: "/tmp/.kube/config"
 
   roles:
     # Role 1: ตรวจสอบ cluster และ deploy application

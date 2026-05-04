@@ -1,5 +1,5 @@
 provider "kubernetes" {
-  config_path = "~/.kube/config"
+  config_path = "/tmp/.kube/config"
 }
 
 resource "kubernetes_namespace_v1" "food_system" {
