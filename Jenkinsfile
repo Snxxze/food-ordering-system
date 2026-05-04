@@ -98,11 +98,16 @@ pipeline {
         stage('Infrastructure (Terraform)') {
             steps {
                 echo 'Provisioning Infrastructure with Terraform...'
-                withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
-                    dir('terraform') {
-                        sh 'terraform init -input=false'
-                        sh 'terraform apply -auto-approve -input=false'
-                    }
+                withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBE_CONFIG_FILE')]) {
+                    sh """
+                        export KUBECONFIG=${KUBE_CONFIG_FILE}
+                        echo "--- Verifying Kubernetes Connectivity ---"
+                        kubectl get nodes || echo "Failed to connect to Kubernetes"
+                        
+                        cd terraform
+                        terraform init -input=false
+                        terraform apply -auto-approve -input=false
+                    """
                 }
             }
         }
@@ -110,10 +115,12 @@ pipeline {
         stage('Configure (Ansible)') {
             steps {
                 echo 'Configuring Environment with Ansible...'
-                withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
-                    dir('ansible') {
-                        sh 'ansible-playbook -i inventory playbook.yml'
-                    }
+                withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBE_CONFIG_FILE')]) {
+                    sh """
+                        export KUBECONFIG=${KUBE_CONFIG_FILE}
+                        cd ansible
+                        ansible-playbook -i inventory playbook.yml
+                    """
                 }
             }
         }
@@ -121,15 +128,17 @@ pipeline {
         stage('Deploy to Kubernetes') {
             steps {
                 echo "Deploying to Kubernetes namespace: ${K8S_NAMESPACE}..."
-                withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBECONFIG')]) {
+                withCredentials([file(credentialsId: 'k8s-kubeconfig', variable: 'KUBE_CONFIG_FILE')]) {
                     sh """
+                        export KUBECONFIG=${KUBE_CONFIG_FILE}
                         kubectl set image deployment/food-backend \
                             food-backend=${BACKEND_IMAGE}:${env.BUILD_ID} \
                             -n ${K8S_NAMESPACE} || \
                         kubectl apply -f k8s/ -n ${K8S_NAMESPACE}
+                        
+                        kubectl rollout status deployment/food-backend -n ${K8S_NAMESPACE} --timeout=3m
+                        kubectl rollout status deployment/food-frontend -n ${K8S_NAMESPACE} --timeout=3m
                     """
-                    sh "kubectl rollout status deployment/food-backend -n ${K8S_NAMESPACE} --timeout=3m"
-                    sh "kubectl rollout status deployment/food-frontend -n ${K8S_NAMESPACE} --timeout=3m"
                 }
             }
         }
