@@ -8,10 +8,6 @@ pipeline {
         K8S_NAMESPACE  = "food-system"
     }
 
-    triggers {
-        githubPush()
-    }
-
     stages {
         stage('Checkout') {
             steps {
